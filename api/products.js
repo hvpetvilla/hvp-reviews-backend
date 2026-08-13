@@ -50,7 +50,7 @@ function isAdmin(req) {
 export default async function handler(req, res) {
   // Allow requests from your website
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Key');
 
   if (req.method === 'OPTIONS') {
@@ -86,6 +86,32 @@ export default async function handler(req, res) {
         price: numPrice
       });
       await product.save();
+      return res.status(200).json({ success: true, product });
+    }
+
+    if (req.method === 'PUT') {
+      if (!isAdmin(req)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const { id } = req.query;
+      if (!id) return res.status(400).json({ error: 'id is required' });
+      const { name, cat, emoji, imgUrl, desc, price } = req.body || {};
+      if (!name || !price) {
+        return res.status(400).json({ error: 'name and price are required' });
+      }
+      const numPrice = Number(price);
+      if (!Number.isFinite(numPrice) || numPrice <= 0) {
+        return res.status(400).json({ error: 'price must be a positive number' });
+      }
+      const product = await Product.findByIdAndUpdate(id, {
+        name: String(name).slice(0, 150),
+        cat: CATEGORIES.includes(cat) ? cat : 'other',
+        emoji: emoji ? String(emoji).slice(0, 8) : '🐾',
+        imgUrl: imgUrl ? String(imgUrl).slice(0, 2_000_000) : '',
+        desc: desc ? String(desc).slice(0, 500) : '',
+        price: numPrice
+      }, { new: true });
+      if (!product) return res.status(404).json({ error: 'Product not found' });
       return res.status(200).json({ success: true, product });
     }
 
