@@ -63,7 +63,7 @@ export default async function handler(req, res) {
         name: String(name).slice(0, 150),
         cat: CATEGORIES.includes(cat) ? cat : 'other',
         emoji: emoji ? String(emoji).slice(0, 8) : '🐾',
-        imgUrl: imgUrl ? String(imgUrl).slice(0, 2000) : '',
+        imgUrl: imgUrl ? String(imgUrl).slice(0, 2_000_000) : '',
         desc: desc ? String(desc).slice(0, 500) : '',
         price: numPrice
       });
