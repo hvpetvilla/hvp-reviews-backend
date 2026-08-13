@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -9,6 +10,23 @@ async function connectDB() {
   if (isConnected) return;
   await mongoose.connect(MONGODB_URI);
   isConnected = true;
+}
+
+// Verifies a signed session token from /api/admin-login, rather than
+// comparing against the raw admin passcode (which would otherwise have
+// to be sent, and therefore visible, on every admin request).
+function verifyToken(token) {
+  if (!process.env.ADMIN_KEY || !token) return false;
+  const parts = String(token).split('.');
+  if (parts.length !== 2) return false;
+  const [ts, sig] = parts;
+  const key = crypto.createHash('sha256').update(String(process.env.ADMIN_KEY) + ':session').digest();
+  const expected = crypto.createHmac('sha256', key).update(ts).digest('hex');
+  const sigBuf = Buffer.from(sig, 'hex');
+  const expBuf = Buffer.from(expected, 'hex');
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return false;
+  const age = Date.now() - Number(ts);
+  return age >= 0 && age < 12 * 60 * 60 * 1000; // 12 hour session
 }
 
 const reviewSchema = new mongoose.Schema({
@@ -61,7 +79,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      if (!process.env.ADMIN_KEY || req.headers['x-admin-key'] !== process.env.ADMIN_KEY) {
+      if (!verifyToken(req.headers['x-admin-key'])) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
       const { id } = req.query;
