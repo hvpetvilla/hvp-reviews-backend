@@ -61,7 +61,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      if (req.headers['x-admin-key'] !== process.env.ADMIN_KEY) {
+      if (!process.env.ADMIN_KEY || req.headers['x-admin-key'] !== process.env.ADMIN_KEY) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
       const { id } = req.query;
