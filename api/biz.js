@@ -219,51 +219,6 @@ async function handleInvoices(req, res, id) {
   return res.status(405).json({ error: 'Method not allowed' });
 }
 
-// One-time migration helper: bulk-imports a JSON export of real data found
-// in a browser localStorage/IndexedDB profile. Invoice numbers are
-// preserved exactly (bypasses the atomic-counter POST path, which is only
-// for genuinely new invoices) since these are historical records already
-// shared with customers. Settings is imported as-is, including the real
-// invCounter, so future invoices continue the correct sequence.
-async function handleImport(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const data = req.body || {};
-  const imported = {};
-
-  const stripLocalId = arr => (Array.isArray(arr) ? arr : []).map(({ id, ...rest }) => rest);
-
-  if (Array.isArray(data.hv_entries) && data.hv_entries.length) {
-    imported.entries = (await Entry.insertMany(stripLocalId(data.hv_entries))).length;
-  }
-  if (Array.isArray(data.hv_vendors) && data.hv_vendors.length) {
-    imported.vendors = (await Vendor.insertMany(data.hv_vendors)).length;
-  }
-  if (Array.isArray(data.hv_supplies) && data.hv_supplies.length) {
-    imported.supplies = (await Supply.insertMany(data.hv_supplies)).length;
-  }
-  if (Array.isArray(data.hvp_products) && data.hvp_products.length) {
-    imported.products = (await BizProduct.insertMany(data.hvp_products.map(capProductPhotos))).length;
-  }
-  if (Array.isArray(data.hvp_requirements) && data.hvp_requirements.length) {
-    imported.requirements = (await Requirement.insertMany(data.hvp_requirements)).length;
-  }
-  if (data.hvp_pricecompare && ((data.hvp_pricecompare.products || []).length || (data.hvp_pricecompare.vendors || []).length)) {
-    await PriceCompare.findOneAndUpdate({}, data.hvp_pricecompare, { upsert: true });
-    imported.pricecompare = 'imported';
-  }
-  if (Array.isArray(data.invoices) && data.invoices.length) {
-    imported.invoices = (await Invoice.insertMany(stripLocalId(data.invoices))).length; // invNumber preserved as-is
-  }
-  if (data.settings) {
-    const settingsBody = { ...data.settings };
-    if (typeof settingsBody.logo === 'string') settingsBody.logo = settingsBody.logo.slice(0, MAX_LOGO_LEN);
-    await BizSettings.findOneAndUpdate({}, settingsBody, { upsert: true, setDefaultsOnInsert: true });
-    imported.settings = 'imported';
-  }
-
-  return res.status(200).json({ success: true, imported });
-}
-
 export default async function handler(req, res) {
   // Locked to the site origin rather than '*' — unlike the public shop/review
   // endpoints, this one carries private financial and customer data.
@@ -285,7 +240,6 @@ export default async function handler(req, res) {
     await connectDB();
     const { resource, id } = req.query;
 
-    if (resource === 'import') return await handleImport(req, res);
     if (resource === 'invoices') return await handleInvoices(req, res, id);
     if (SINGLETON_MODELS[resource]) return await handleSingleton(SINGLETON_MODELS[resource], resource, req, res);
     if (LIST_MODELS[resource]) return await handleList(LIST_MODELS[resource], resource, req, res, id);
