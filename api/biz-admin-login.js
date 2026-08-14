@@ -22,9 +22,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { passcode } = req.body || {};
-  if (!process.env.BIZ_ADMIN_KEY || passcode !== process.env.BIZ_ADMIN_KEY) {
-    return res.status(401).json({ error: 'Incorrect passcode' });
+  const { username, passcode } = req.body || {};
+  if (!process.env.BIZ_ADMIN_USER || !process.env.BIZ_ADMIN_KEY ||
+      username !== process.env.BIZ_ADMIN_USER || passcode !== process.env.BIZ_ADMIN_KEY) {
+    return res.status(401).json({ error: 'Incorrect username or passcode' });
   }
 
   return res.status(200).json({ token: makeToken() });
