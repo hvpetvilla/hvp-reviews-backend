@@ -24,7 +24,7 @@ function verifyBizToken(token) {
   const expBuf = Buffer.from(expected, 'hex');
   if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return false;
   const age = Date.now() - Number(ts);
-  return age >= 0 && age < 12 * 60 * 60 * 1000; // 12 hour session
+  return age >= 0 && age < 60 * 60 * 1000; // 1 hour session
 }
 
 // ── Schemas ──
