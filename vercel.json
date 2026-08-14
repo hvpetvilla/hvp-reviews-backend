@@ -11,6 +11,14 @@
     "api/admin-login.js": {
       "memory": 256,
       "maxDuration": 10
+    },
+    "api/biz.js": {
+      "memory": 256,
+      "maxDuration": 10
+    },
+    "api/biz-admin-login.js": {
+      "memory": 256,
+      "maxDuration": 10
     }
   }
 }
