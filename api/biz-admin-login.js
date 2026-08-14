@@ -11,7 +11,7 @@ function makeToken() {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', 'https://hvpetvilla.github.io');
+  res.setHeader('Access-Control-Allow-Origin', 'https://hvpetvilla.in');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 

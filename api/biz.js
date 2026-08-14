@@ -213,7 +213,7 @@ async function handleInvoices(req, res, id) {
 export default async function handler(req, res) {
   // Locked to the site origin rather than '*' — unlike the public shop/review
   // endpoints, this one carries private financial and customer data.
-  res.setHeader('Access-Control-Allow-Origin', 'https://hvpetvilla.github.io');
+  res.setHeader('Access-Control-Allow-Origin', 'https://hvpetvilla.in');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Biz-Admin-Key');
 
