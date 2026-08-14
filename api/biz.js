@@ -169,7 +169,16 @@ async function handleSingleton(Model, resource, req, res) {
     const body = { ...(req.body || {}) };
     if (resource === 'settings') {
       if (typeof body.logo === 'string') body.logo = body.logo.slice(0, MAX_LOGO_LEN);
-      delete body.invCounter; // only ever advanced atomically via nextInvoiceNumber
+      // invCounter CAN be set here -- the app's Settings screen has a
+      // legitimate manual "reset/renumber invoices" field. Concurrent
+      // invoice creation stays race-free regardless, since POST always
+      // claims its number via an atomic $inc (see nextInvoiceNumber),
+      // independent of whatever value a settings edit last wrote.
+      if (body.invCounter !== undefined) {
+        const n = Number(body.invCounter);
+        if (!Number.isFinite(n) || n < 1) delete body.invCounter;
+        else body.invCounter = Math.floor(n);
+      }
     }
     const doc = await Model.findOneAndUpdate({}, body, { upsert: true, new: true, setDefaultsOnInsert: true });
     return res.status(200).json(doc);
