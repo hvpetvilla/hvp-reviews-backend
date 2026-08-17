@@ -19,6 +19,10 @@
     "api/biz-admin-login.js": {
       "memory": 256,
       "maxDuration": 10
+    },
+    "api/upload.js": {
+      "memory": 256,
+      "maxDuration": 15
     }
   }
 }
