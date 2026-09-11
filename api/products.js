@@ -1,150 +1,65 @@
 const mongoose = require('mongoose');
-const crypto = require('crypto');
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
 // Reuse connection across calls
 let isConnected = false;
-
 async function connectDB() {
   if (isConnected) return;
   await mongoose.connect(MONGODB_URI);
   isConnected = true;
 }
 
-// Verifies a signed session token from /api/admin-login, rather than
-// comparing against the raw admin passcode (which would otherwise have
-// to be sent, and therefore visible, on every admin request).
-function verifyToken(token) {
-  if (!process.env.ADMIN_KEY || !token) return false;
-  const parts = String(token).split('.');
-  if (parts.length !== 2) return false;
-  const [ts, sig] = parts;
-  const key = crypto.createHash('sha256').update(String(process.env.ADMIN_KEY) + ':session').digest();
-  const expected = crypto.createHmac('sha256', key).update(ts).digest('hex');
-  const sigBuf = Buffer.from(sig, 'hex');
-  const expBuf = Buffer.from(expected, 'hex');
-  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return false;
-  const age = Date.now() - Number(ts);
-  return age >= 0 && age < 12 * 60 * 60 * 1000; // 12 hour session
-}
-
-// Also accept a BizTrack session token (signed with BIZ_ADMIN_KEY), so an
-// admin already logged into BizTrack can manage the storefront catalogue
-// there without a second, separate login.
-function verifyBizToken(token) {
-  if (!process.env.BIZ_ADMIN_KEY || !token) return false;
-  const parts = String(token).split('.');
-  if (parts.length !== 2) return false;
-  const [ts, sig] = parts;
-  const key = crypto.createHash('sha256').update(String(process.env.BIZ_ADMIN_KEY) + ':session').digest();
-  const expected = crypto.createHmac('sha256', key).update(ts).digest('hex');
-  const sigBuf = Buffer.from(sig, 'hex');
-  const expBuf = Buffer.from(expected, 'hex');
-  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return false;
-  const age = Date.now() - Number(ts);
-  return age >= 0 && age < 60 * 60 * 1000; // 1 hour session
-}
-
-const CATEGORIES = ['food', 'accessories', 'cages', 'other'];
-
-const productSchema = new mongoose.Schema({
-  name: String,
-  cat: String,
-  emoji: String,
-  imgUrl: String,
-  desc: String,
-  price: Number,
-  date: { type: Date, default: Date.now }
+// Mirrors the BizProduct schema in api/biz.js. BizTrack's internal "Products"
+// catalogue (Birds, Reptiles, Feed & Medicine, Equipment, ...) is now the
+// single source for everything shown on the website — this endpoint only
+// reads and republishes it publicly. All writes happen through BizTrack via
+// /api/biz?resource=products; there is no admin path here anymore.
+const bizProductSchema = new mongoose.Schema({
+  name: String, category: String, breed: String,
+  mrp: Number, price: Number, cost: Number, stock: Number,
+  avail: String, age: String, gender: String, desc: String, notes: String,
+  photos: [String],
+  addedOn: { type: Date, default: Date.now }
 });
+const BizProduct = mongoose.models.BizProduct || mongoose.model('BizProduct', bizProductSchema);
 
-const Product = mongoose.models.Product || mongoose.model('Product', productSchema);
-
-function isAdmin(req) {
-  const token = req.headers['x-admin-key'];
-  return verifyToken(token) || verifyBizToken(token);
-}
+// Categories that represent live animals go to the website's Live Pets
+// section; everything else (food, equipment, accessories...) goes to Shop.
+const PET_CATEGORIES = ['Birds', 'Reptiles', 'Small Mammals', 'Aquatics', 'Exotic'];
 
 export default async function handler(req, res) {
   // Allow requests from your website
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Key');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   try {
     await connectDB();
-
-    if (req.method === 'GET') {
-      const products = await Product.find().sort({ date: 1 });
-      return res.status(200).json(products);
-    }
-
-    if (req.method === 'POST') {
-      if (!isAdmin(req)) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-      const { name, cat, emoji, imgUrl, desc, price } = req.body || {};
-      if (!name || !price) {
-        return res.status(400).json({ error: 'name and price are required' });
-      }
-      const numPrice = Number(price);
-      if (!Number.isFinite(numPrice) || numPrice <= 0) {
-        return res.status(400).json({ error: 'price must be a positive number' });
-      }
-      const product = new Product({
-        name: String(name).slice(0, 150),
-        cat: CATEGORIES.includes(cat) ? cat : 'other',
-        emoji: emoji ? String(emoji).slice(0, 8) : '🐾',
-        imgUrl: imgUrl ? String(imgUrl).slice(0, 2_000_000) : '',
-        desc: desc ? String(desc).slice(0, 500) : '',
-        price: numPrice
-      });
-      await product.save();
-      return res.status(200).json({ success: true, product });
-    }
-
-    if (req.method === 'PUT') {
-      if (!isAdmin(req)) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-      const { id } = req.query;
-      if (!id) return res.status(400).json({ error: 'id is required' });
-      const { name, cat, emoji, imgUrl, desc, price } = req.body || {};
-      if (!name || !price) {
-        return res.status(400).json({ error: 'name and price are required' });
-      }
-      const numPrice = Number(price);
-      if (!Number.isFinite(numPrice) || numPrice <= 0) {
-        return res.status(400).json({ error: 'price must be a positive number' });
-      }
-      const product = await Product.findByIdAndUpdate(id, {
-        name: String(name).slice(0, 150),
-        cat: CATEGORIES.includes(cat) ? cat : 'other',
-        emoji: emoji ? String(emoji).slice(0, 8) : '🐾',
-        imgUrl: imgUrl ? String(imgUrl).slice(0, 2_000_000) : '',
-        desc: desc ? String(desc).slice(0, 500) : '',
-        price: numPrice
-      }, { new: true });
-      if (!product) return res.status(404).json({ error: 'Product not found' });
-      return res.status(200).json({ success: true, product });
-    }
-
-    if (req.method === 'DELETE') {
-      if (!isAdmin(req)) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-      const { id } = req.query;
-      if (!id) return res.status(400).json({ error: 'id is required' });
-      await Product.findByIdAndDelete(id);
-      return res.status(200).json({ success: true });
-    }
-
-    return res.status(405).json({ error: 'Method not allowed' });
-
+    const docs = await BizProduct.find({ avail: 'Available' }).sort({ addedOn: -1 });
+    // cost (purchase price) and notes are internal-only — never expose them
+    // on the public storefront API.
+    const products = docs.map(p => ({
+      _id: p._id,
+      name: p.name,
+      category: p.category,
+      section: PET_CATEGORIES.includes(p.category) ? 'pets' : 'shop',
+      breed: p.breed || '',
+      age: p.age || '',
+      gender: p.gender || '',
+      price: p.price,
+      mrp: p.mrp,
+      desc: p.desc || '',
+      photos: Array.isArray(p.photos) ? p.photos : []
+    }));
+    return res.status(200).json(products);
   } catch (err) {
     console.error('DB Error:', err.message);
     return res.status(500).json({ error: err.message });
