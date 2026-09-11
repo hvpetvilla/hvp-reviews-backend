@@ -28,6 +28,12 @@ const BizProduct = mongoose.models.BizProduct || mongoose.model('BizProduct', bi
 // section; everything else (food, equipment, accessories...) goes to Shop.
 const PET_CATEGORIES = ['Birds', 'Reptiles', 'Small Mammals', 'Aquatics', 'Exotic'];
 
+// Every status an item can carry is shown on the website — Available items
+// with their normal buy/enquire action, the rest with a status badge and a
+// WhatsApp action instead (see shop.html). Anything outside this list (e.g.
+// a blank avail on a freshly-created item) stays unpublished.
+const PUBLIC_STATUSES = ['Available', 'Out of Stock - Raise Order Request', 'Display', 'Sold'];
+
 export default async function handler(req, res) {
   // Allow requests from your website
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -43,7 +49,7 @@ export default async function handler(req, res) {
 
   try {
     await connectDB();
-    const docs = await BizProduct.find({ avail: 'Available' }).sort({ addedOn: -1 });
+    const docs = await BizProduct.find({ avail: { $in: PUBLIC_STATUSES } }).sort({ addedOn: -1 });
     // cost (purchase price) and notes are internal-only — never expose them
     // on the public storefront API.
     const products = docs.map(p => ({
@@ -51,6 +57,7 @@ export default async function handler(req, res) {
       name: p.name,
       category: p.category,
       section: PET_CATEGORIES.includes(p.category) ? 'pets' : 'shop',
+      avail: p.avail,
       breed: p.breed || '',
       age: p.age || '',
       gender: p.gender || '',
