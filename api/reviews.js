@@ -29,6 +29,28 @@ function verifyToken(token) {
   return age >= 0 && age < 12 * 60 * 60 * 1000; // 12 hour session
 }
 
+// Also accept a BizTrack session token (signed with BIZ_ADMIN_KEY), so an
+// admin already logged into BizTrack can moderate reviews there without a
+// second, separate login.
+function verifyBizToken(token) {
+  if (!process.env.BIZ_ADMIN_KEY || !token) return false;
+  const parts = String(token).split('.');
+  if (parts.length !== 2) return false;
+  const [ts, sig] = parts;
+  const key = crypto.createHash('sha256').update(String(process.env.BIZ_ADMIN_KEY) + ':session').digest();
+  const expected = crypto.createHmac('sha256', key).update(ts).digest('hex');
+  const sigBuf = Buffer.from(sig, 'hex');
+  const expBuf = Buffer.from(expected, 'hex');
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return false;
+  const age = Date.now() - Number(ts);
+  return age >= 0 && age < 60 * 60 * 1000; // 1 hour session
+}
+
+function isReviewAdmin(req) {
+  const token = req.headers['x-admin-key'];
+  return verifyToken(token) || verifyBizToken(token);
+}
+
 const reviewSchema = new mongoose.Schema({
   name: String,
   pet: String,
@@ -79,7 +101,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      if (!verifyToken(req.headers['x-admin-key'])) {
+      if (!isReviewAdmin(req)) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
       const { id } = req.query;

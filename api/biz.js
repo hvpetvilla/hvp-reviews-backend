@@ -33,7 +33,7 @@ const entrySchema = new mongoose.Schema({
   item: String, partner: String, date: String,
   amount: { type: Number, default: 0 }, revenue: { type: Number, default: 0 },
   products: [{
-    name: String, qty: Number, cost: Number, cpu: Number,
+    name: String, qty: Number, cost: Number, cpu: Number, partner: String,
     sales: [{ qty: Number, price: Number }]
   }],
   status: String, category: String, remarks: String
