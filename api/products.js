@@ -44,8 +44,10 @@ export default async function handler(req, res) {
   try {
     await connectDB();
     const docs = await BizProduct.find({ avail: 'Available' }).sort({ addedOn: -1 });
-    // cost (purchase price) and notes are internal-only — never expose them
-    // on the public storefront API.
+    // cost (purchase price), mrp and notes are internal-only — never expose
+    // them on the public storefront API. Sending mrp alongside price would
+    // let anyone back out the discount/margin, so it's dropped here too,
+    // not just hidden in the UI.
     const products = docs.map(p => ({
       _id: p._id,
       name: p.name,
@@ -55,7 +57,6 @@ export default async function handler(req, res) {
       age: p.age || '',
       gender: p.gender || '',
       price: p.price,
-      mrp: p.mrp,
       desc: p.desc || '',
       photos: Array.isArray(p.photos) ? p.photos : []
     }));
