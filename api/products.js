@@ -26,12 +26,28 @@ const BizProduct = mongoose.models.BizProduct || mongoose.model('BizProduct', bi
 
 // Categories that represent live animals go to the website's Live Pets
 // section; everything else (food, equipment, accessories...) goes to Shop.
-const PET_CATEGORIES = ['Birds', 'Reptiles', 'Small Mammals', 'Aquatics', 'Exotic'];
+// BizTrack lets an item be saved under a specific category (e.g. "Parrots")
+// or its group name ("Birds"), so map every specific one to its group — the
+// website's filter chips work on groups. Mirrors the optgroups in BizTrack's
+// product form.
+const PET_GROUPS = {
+  'Birds': ['Parrots', 'Cockatiels', 'Budgerigars', 'Lovebirds', 'Finches', 'Canaries', 'Macaws', 'Conures', 'Pigeons & Doves'],
+  'Reptiles': ['Lizards', 'Geckos', 'Tortoises & Turtles', 'Snakes', 'Chameleons', 'Iguanas'],
+  'Small Mammals': ['Rabbits', 'Guinea Pigs', 'Hamsters', 'Gerbils', 'Chinchillas', 'Ferrets', 'Sugar Gliders'],
+  'Aquatics': ['Freshwater Fish', 'Saltwater Fish', 'Koi & Goldfish', 'Turtles (Aquatic)', 'Shrimps & Crabs'],
+  'Exotic': ['Hedgehogs', 'Tarantulas & Spiders', 'Scorpions', 'Stick Insects'],
+  'Domestic Pets': ['Dogs', 'Cats', 'Puppies', 'Kittens']
+};
+const PET_GROUP_OF = {};
+for (const [group, cats] of Object.entries(PET_GROUPS)) {
+  PET_GROUP_OF[group] = group;
+  cats.forEach(c => { PET_GROUP_OF[c] = group; });
+}
 // HV Petvilla Farm produce goes to the Farm section (shop.html Farm tab and farm.html).
 const FARM_CATEGORIES = ['Country Hen', 'Country Eggs'];
 function sectionFor(category) {
   if (FARM_CATEGORIES.includes(category)) return 'farm';
-  return PET_CATEGORIES.includes(category) ? 'pets' : 'shop';
+  return PET_GROUP_OF[category] ? 'pets' : 'shop';
 }
 
 // Every status an item can carry is shown on the website — Available items
@@ -63,6 +79,7 @@ export default async function handler(req, res) {
       name: p.name,
       category: p.category,
       section: sectionFor(p.category),
+      group: PET_GROUP_OF[p.category] || p.category,
       avail: p.avail,
       breed: p.breed || '',
       age: p.age || '',
