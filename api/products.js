@@ -27,6 +27,12 @@ const BizProduct = mongoose.models.BizProduct || mongoose.model('BizProduct', bi
 // Categories that represent live animals go to the website's Live Pets
 // section; everything else (food, equipment, accessories...) goes to Shop.
 const PET_CATEGORIES = ['Birds', 'Reptiles', 'Small Mammals', 'Aquatics', 'Exotic'];
+// HV Petvilla Farm produce goes to the Farm section (shop.html Farm tab and farm.html).
+const FARM_CATEGORIES = ['Country Hen', 'Country Eggs'];
+function sectionFor(category) {
+  if (FARM_CATEGORIES.includes(category)) return 'farm';
+  return PET_CATEGORIES.includes(category) ? 'pets' : 'shop';
+}
 
 // Every status an item can carry is shown on the website — Available items
 // with their normal buy/enquire action, the rest with a status badge and a
@@ -56,7 +62,7 @@ export default async function handler(req, res) {
       _id: p._id,
       name: p.name,
       category: p.category,
-      section: PET_CATEGORIES.includes(p.category) ? 'pets' : 'shop',
+      section: sectionFor(p.category),
       avail: p.avail,
       breed: p.breed || '',
       age: p.age || '',
