@@ -33,6 +33,7 @@ const pricingTierSchema = new mongoose.Schema({
   label: String,
   withoutFood: Number,
   withFood: Number,
+  specialCare: { type: Number, default: null }, // Special care (hand-feeding) per night; optional
   note: String,
   order: { type: Number, default: 0 },
   date: { type: Date, default: Date.now }
@@ -66,7 +67,7 @@ export default async function handler(req, res) {
       if (!isAdmin(req)) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
-      const { label, withoutFood, withFood, note, order } = req.body || {};
+      const { label, withoutFood, withFood, specialCare, note, order } = req.body || {};
       if (!label || withoutFood == null || withFood == null) {
         return res.status(400).json({ error: 'label, withoutFood and withFood are required' });
       }
@@ -75,10 +76,15 @@ export default async function handler(req, res) {
       if (!Number.isFinite(numWithout) || numWithout < 0 || !Number.isFinite(numWith) || numWith < 0) {
         return res.status(400).json({ error: 'withoutFood and withFood must be non-negative numbers' });
       }
+      const numSpecial = (specialCare == null || specialCare === '') ? null : Number(specialCare);
+      if (numSpecial !== null && (!Number.isFinite(numSpecial) || numSpecial < 0)) {
+        return res.status(400).json({ error: 'specialCare must be a non-negative number' });
+      }
       const tier = new PricingTier({
         label: String(label).slice(0, 150),
         withoutFood: numWithout,
         withFood: numWith,
+        specialCare: numSpecial,
         note: note ? String(note).slice(0, 300) : '',
         order: Number.isFinite(Number(order)) ? Number(order) : 0
       });
@@ -92,7 +98,7 @@ export default async function handler(req, res) {
       }
       const { id } = req.query;
       if (!id) return res.status(400).json({ error: 'id is required' });
-      const { label, withoutFood, withFood, note, order } = req.body || {};
+      const { label, withoutFood, withFood, specialCare, note, order } = req.body || {};
       if (!label || withoutFood == null || withFood == null) {
         return res.status(400).json({ error: 'label, withoutFood and withFood are required' });
       }
@@ -101,10 +107,15 @@ export default async function handler(req, res) {
       if (!Number.isFinite(numWithout) || numWithout < 0 || !Number.isFinite(numWith) || numWith < 0) {
         return res.status(400).json({ error: 'withoutFood and withFood must be non-negative numbers' });
       }
+      const numSpecial = (specialCare == null || specialCare === '') ? null : Number(specialCare);
+      if (numSpecial !== null && (!Number.isFinite(numSpecial) || numSpecial < 0)) {
+        return res.status(400).json({ error: 'specialCare must be a non-negative number' });
+      }
       const tier = await PricingTier.findByIdAndUpdate(id, {
         label: String(label).slice(0, 150),
         withoutFood: numWithout,
         withFood: numWith,
+        specialCare: numSpecial,
         note: note ? String(note).slice(0, 300) : '',
         order: Number.isFinite(Number(order)) ? Number(order) : 0
       }, { new: true });
