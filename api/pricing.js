@@ -41,6 +41,34 @@ const pricingTierSchema = new mongoose.Schema({
 
 const PricingTier = mongoose.models.PricingTier || mongoose.model('PricingTier', pricingTierSchema);
 
+// Boarding terms & conditions: a single document edited from the boarding page admin.
+const boardingTermsSchema = new mongoose.Schema({
+  key: { type: String, default: 'boarding', unique: true },
+  text: { type: String, default: '' },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const BoardingTerms = mongoose.models.BoardingTerms || mongoose.model('BoardingTerms', boardingTermsSchema);
+
+async function handleTerms(req, res) {
+  if (req.method === 'GET') {
+    const doc = await BoardingTerms.findOne({ key: 'boarding' });
+    return res.status(200).json({ text: doc ? doc.text : '', updatedAt: doc ? doc.updatedAt : null });
+  }
+  if (req.method === 'PUT' || req.method === 'POST') {
+    if (!isAdmin(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const { text } = req.body || {};
+    if (typeof text !== 'string') return res.status(400).json({ error: 'text is required' });
+    const doc = await BoardingTerms.findOneAndUpdate(
+      { key: 'boarding' },
+      { text: text.slice(0, 20000), updatedAt: new Date() },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    return res.status(200).json({ success: true, text: doc.text, updatedAt: doc.updatedAt });
+  }
+  return res.status(405).json({ error: 'Method not allowed' });
+}
+
 function isAdmin(req) {
   return verifyToken(req.headers['x-admin-key']);
 }
@@ -57,6 +85,10 @@ export default async function handler(req, res) {
 
   try {
     await connectDB();
+
+    if (req.query && req.query.resource === 'terms') {
+      return handleTerms(req, res);
+    }
 
     if (req.method === 'GET') {
       const tiers = await PricingTier.find().sort({ order: 1, date: 1 });
