@@ -45,10 +45,45 @@ const PricingTier = mongoose.models.PricingTier || mongoose.model('PricingTier',
 const boardingTermsSchema = new mongoose.Schema({
   key: { type: String, default: 'boarding', unique: true },
   text: { type: String, default: '' },
+  // Boarding setup photos shown on the boarding page and in the pricing PDF
+  photos: { type: [{ url: String, caption: String, _id: false }], default: [] },
   updatedAt: { type: Date, default: Date.now }
 });
 
 const BoardingTerms = mongoose.models.BoardingTerms || mongoose.model('BoardingTerms', boardingTermsSchema);
+
+// Only accept images uploaded through /api/upload (Vercel Blob public storage)
+function isBlobUrl(u) {
+  try {
+    const url = new URL(String(u));
+    return url.protocol === 'https:' && /\.public\.blob\.vercel-storage\.com$/.test(url.hostname);
+  } catch (e) { return false; }
+}
+
+async function handlePhotos(req, res) {
+  if (req.method === 'GET') {
+    const doc = await BoardingTerms.findOne({ key: 'boarding' });
+    return res.status(200).json({ photos: doc ? doc.photos || [] : [] });
+  }
+  if (req.method === 'PUT' || req.method === 'POST') {
+    if (!isAdmin(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const { photos } = req.body || {};
+    if (!Array.isArray(photos)) return res.status(400).json({ error: 'photos must be a list' });
+    if (photos.length > 30) return res.status(400).json({ error: 'At most 30 photos' });
+    const clean = [];
+    for (const p of photos) {
+      if (!p || !isBlobUrl(p.url)) return res.status(400).json({ error: 'Invalid photo URL' });
+      clean.push({ url: String(p.url).slice(0, 500), caption: p.caption ? String(p.caption).slice(0, 120) : '' });
+    }
+    const doc = await BoardingTerms.findOneAndUpdate(
+      { key: 'boarding' },
+      { photos: clean, updatedAt: new Date() },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    return res.status(200).json({ success: true, photos: doc.photos });
+  }
+  return res.status(405).json({ error: 'Method not allowed' });
+}
 
 async function handleTerms(req, res) {
   if (req.method === 'GET') {
@@ -88,6 +123,9 @@ export default async function handler(req, res) {
 
     if (req.query && req.query.resource === 'terms') {
       return handleTerms(req, res);
+    }
+    if (req.query && req.query.resource === 'photos') {
+      return handlePhotos(req, res);
     }
 
     if (req.method === 'GET') {
